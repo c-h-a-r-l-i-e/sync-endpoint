@@ -1,0 +1,5 @@
+sqlalchemy
+pandas
+suds-jurko
+requests
+psycopg2

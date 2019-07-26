@@ -1,0 +1,7 @@
+org/opendatakit/aggregate/datamodel/FormElementModelTest.class
+org/opendatakit/aggregate/SerializationTest.class
+org/opendatakit/aggregate/T$Columns.class
+org/opendatakit/aggregate/parser/NamingTest.class
+org/opendatakit/aggregate/format/structure/KmlGeoTraceParsingTest.class
+org/opendatakit/aggregate/T.class
+org/opendatakit/aggregate/T$Data.class

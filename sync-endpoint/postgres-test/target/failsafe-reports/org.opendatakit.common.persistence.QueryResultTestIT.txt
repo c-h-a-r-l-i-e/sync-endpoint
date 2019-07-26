@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: org.opendatakit.common.persistence.QueryResultTestIT
+-------------------------------------------------------------------------------
+Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 180.737 s - in org.opendatakit.common.persistence.QueryResultTestIT
