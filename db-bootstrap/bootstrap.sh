@@ -27,6 +27,7 @@ case ${DB_VAR} in
         echo "postgres db detected"
         DB_PORT=5432
         eval ${WAIT_CMD}
+	eval "sleep 20"
 	echo "Db container id ${DB_CONTAINER_ID}"
         docker exec ${DB_CONTAINER_ID} psql \
             -c 'CREATE USER odk WITH UNENCRYPTED PASSWORD '\''odk'\'';' \
