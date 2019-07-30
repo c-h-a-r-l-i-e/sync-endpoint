@@ -22,6 +22,7 @@ cn: default_prefix site_admins
 gidNumber: 500
 objectClass: posixGroup
 objectClass: top
+memberUid: dbTransfer
 
 dn: gidNumber=501,ou=default_prefix,ou=groups,{{ LDAP_BASE_DN }}
 changetype: add
@@ -64,3 +65,15 @@ cn: default_prefix data_collectors
 gidNumber: 506
 objectClass: posixGroup
 objectClass: top
+
+dn: uid=dbTransfer,ou=people,{{ LDAP_BASE_DN }}
+changetype: add
+cn: test account
+gidNumber: 500
+uidNumber: 1
+objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: top
+userPassword: thisWillBeR3placedByBo0tstr4p
+homeDirectory: /home/users/dbtransfer
+sn: dbTransfer

@@ -18,7 +18,8 @@ apt-get -y install \
  openjdk-8-jdk-headless \
  software-properties-common \
  maven \
- git
+ git \
+ openssl
 
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 add-apt-repository -y \
@@ -42,5 +43,7 @@ docker build -t odk/db-bootstrap db-bootstrap
 docker build --pull -t odk/openldap openldap
 docker build --pull -t odk/phpldapadmin phpldapadmin
 docker build -t odk/db-transfer db-transfer
+
+openssl rand -base64 48 | tr -d '\n' | docker secret create sync-pwd -
 
 docker stack deploy -c docker-compose.yml syncldap

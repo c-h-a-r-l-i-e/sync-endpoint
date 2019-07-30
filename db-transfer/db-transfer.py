@@ -1,4 +1,5 @@
 import odkxpy
+import os
 import time
 import sqlalchemy
 from sqlalchemy import create_engine, Table, Column, select, text
@@ -6,7 +7,9 @@ from sqlalchemy import create_engine, Table, Column, select, text
 # For now hardcode sensitive databases we want to delete, could later make this some sort of configuration file
 SENSITIVE_TABLES = ['survey']
 # Time we wait after transferring a set of rows before transferring the next set
-WAIT_TIME = 20
+WAIT_TIME = 15
+
+TESTING = False
 
 """
  Provide this class with a OdkxServerTable and a sqlalchemy database engine
@@ -174,12 +177,25 @@ class TableTransfer():
 
 
 if __name__ == "__main__":
-    #TODO: make this so it runs over internal network!!!
-    con = odkxpy.OdkxConnection('http://nginx/odktables/', 'cmaclean', 'T35t')
+    # Get password from secret provided by docker
+    con = odkxpy.OdkxConnection('http://nginx/odktables/', 'dbTransfer', 
+            os.popen("cat /run/secrets/sync-pwd").read())
+
+    if TESTING:
+        con = odkxpy.OdkxConnection('http://odk.fr.to/odktables/', 'cmaclean', 
+                'T35t')
+
     meta = odkxpy.OdkxServerMeta(con)
     tables = meta.getTables()
-    #TODO: make these username/password entries automatic (especially if we expose the database!)
-    eng = create_engine('postgresql://test:test@frontend-db/test')
+
+    if TESTING:
+        eng = create_engine('postgresql://test:test@localhost/test')
+
+    else:
+        db = os.environ['POSTGRES_DB']
+        pswd = os.environ['POSTGRES_PASSWORD']
+        usr = os.environ['POSTGRES_USER']
+        eng = create_engine('postgresql://{}:{}@frontend-db/{}'.format(usr, pswd, db))
 
     transfers = []
     for table in tables:
@@ -188,3 +204,11 @@ if __name__ == "__main__":
         for transfer in transfers:
             transfer.transfer()
         time.sleep(WAIT_TIME)
+
+        # Add any recently added tables and transfer them
+        newTables = meta.getTables()
+        for table in newTables:
+            if not table.tableId in [t.tableId for t in tables]:
+                print("Monitoring new table: " + table.tableId)
+                tables.append(table)
+                transfers.append(TableTransfer(table, eng))

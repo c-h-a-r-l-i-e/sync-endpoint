@@ -41,7 +41,8 @@ services:
       - frontend-db-network
     env_file:
       - frontend-db.env
-      - ldap.env
+    secrets:
+      - sync-pwd
   db:
     image: postgres:9.6
     deploy:
@@ -71,6 +72,8 @@ services:
     env_file:
       - db.env
       - sync.env
+    secrets:
+      - sync-pwd
   sync:
     image: odk/sync-endpoint
     networks: 
@@ -161,6 +164,8 @@ secrets:
     file: ./config/sync-endpoint/security.properties
   org.opendatakit.aggregate.jdbc.properties:
     file: ./config/sync-endpoint/jdbc.properties
+  sync-pwd:
+    external: true
   # com.nginx.ssl_certificate_key:
     # external: 
       # name: NAME OF SECRET

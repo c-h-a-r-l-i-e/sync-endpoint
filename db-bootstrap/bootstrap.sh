@@ -17,7 +17,7 @@ sleep 10
 STACK_NAME=$(docker ps -f "ID=${HOSTNAME}" --format '{{ .Names }}' | grep -oE '^[^_]*')
 DB_VAR=$(docker service inspect -f "{{if eq \"${STACK_NAME}_db\" .Spec.Name}}{{.Spec.TaskTemplate.ContainerSpec.Image}}{{end}}" $(docker service ls -q) | grep -oE '^[^:]*')
 DB_CONTAINER_ID=$(docker ps -f "volume=${STACK_NAME}_db-vol" --format '{{.ID}}')
-
+LDAP_CONTAINER_ID=$(docker ps -f "label=com.docker.swarm.service.name=syncldap_ldap-service" --format '{{.ID}}')
 
 # try to establish tcp connection with db, each connection timesout after 1 second 
 WAIT_CMD="while ! nc -w 1 db \${DB_PORT} < /dev/null; do echo 'waiting'; sleep 1; done"
@@ -27,7 +27,7 @@ case ${DB_VAR} in
         echo "postgres db detected"
         DB_PORT=5432
         eval ${WAIT_CMD}
-	eval "sleep 20"
+	sleep 20
 	echo "Db container id ${DB_CONTAINER_ID}"
         docker exec ${DB_CONTAINER_ID} psql \
             -c 'CREATE USER odk WITH UNENCRYPTED PASSWORD '\''odk'\'';' \
@@ -59,7 +59,7 @@ echo "Done"
 echo "Checking Sync endpoint"
 
 # Wait 5 seconds for a 200 from Sync
-timeout -s 5 sh -c 'while ! echo -ne "GET / HTTP/1.1\nHost: sync\n\n" | nc -w 1 sync 8080 | grep -q "HTTP/1.1 200"; do echo '\''waiting for Sync'\''; sleep 1; done'
+timeout 5 sh -c 'while ! echo -ne "GET / HTTP/1.1\nHost: sync\n\n" | nc -w 1 sync 8080 | grep -q "HTTP/1.1 200"; do echo '\''waiting for Sync'\''; sleep 1; done'
 
 if [ $? -eq 143 ]; then
     echo "Timeout"
@@ -67,6 +67,16 @@ if [ $? -eq 143 ]; then
     # let Docker restart the container
     docker kill $(docker ps -f "label=com.docker.swarm.service.name=${STACK_NAME}_sync" --format '{{.ID}}')
 fi;
+
+# setup ldap
+echo "Setting up LDAP container"
+
+docker exec ${LDAP_CONTAINER_ID} ldappasswd -D "cn=admin,dc=example,dc=org" \
+	-w admin -S "uid=dbTransfer,ou=people,dc=example,dc=org" \
+	-s $(cat /run/secrets/sync-pwd)
+
+echo "Done"
+
 
 echo "Exit"
 
