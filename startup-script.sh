@@ -6,4 +6,4 @@ fi
 
 wget https://raw.githubusercontent.com/c-h-a-r-l-i-e/sync-endpoint/master/startup-bg.sh
 
-/bin/bash startup-bg.sh &
+nohup /bin/bash startup-bg.sh &
