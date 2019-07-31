@@ -22,16 +22,23 @@ services:
       - ldap-network
     env_file:
       - ldap.env
+#  frontend-db:
+#    image: postgres:9.6
+#    deploy:
+#      replicas: 1
+#    networks:
+#      - frontend-db-network
+#    volumes:
+#      - frontend-db-vol:/var/lib/postgresql/data
+#    env_file:
+#      - frontend-db.env
   frontend-db:
-    image: postgres:9.6
-    deploy:
-      replicas: 1
+    image: gcr.io/cloudsql-docker/gce-proxy:1.12
+    command: /cloud_sql_proxy -instances=sentinel-247912:europe-west1:sync-endpoint-db-instance=tcp:0.0.0.0:5432
     networks:
       - frontend-db-network
     volumes:
-      - frontend-db-vol:/var/lib/postgresql/data
-    env_file:
-      - frontend-db.env
+      - ~/.config/:/root/.config
   db-transfer:
     image: odk/db-transfer
     deploy:
@@ -136,7 +143,6 @@ networks:
     internal: true
 
 volumes:
-  frontend-db-vol:
   db-vol: # preserve db
   # these 2 need to be removed together
   ldap-vol: # preserve ldap db
