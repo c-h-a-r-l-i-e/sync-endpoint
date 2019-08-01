@@ -34,11 +34,12 @@ services:
 #      - frontend-db.env
   frontend-db:
     image: gcr.io/cloudsql-docker/gce-proxy:1.12
-    command: /cloud_sql_proxy -instances=sentinel-247912:europe-west1:sync-endpoint-db-instance=tcp:0.0.0.0:5432
+    command: /cloud_sql_proxy -instances=$INSTANCE_NAME=tcp:0.0.0.0:5432
     networks:
       - frontend-db-network
+      - external-network
     volumes:
-      - ~/.config/:/root/.config
+      - ~/.config:/root/.config
   db-transfer:
     image: odk/db-transfer
     deploy:
@@ -141,6 +142,8 @@ networks:
     driver_opts:
       encrypted: ""
     internal: true
+  external-network:
+    driver: overlay
 
 volumes:
   db-vol: # preserve db

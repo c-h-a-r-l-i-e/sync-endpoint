@@ -44,8 +44,15 @@ docker build --pull -t odk/openldap openldap
 docker build --pull -t odk/phpldapadmin phpldapadmin
 docker build -t odk/db-transfer db-transfer
 
-gcloud auth configure-docker 
+SERVICE_ACCOUNT=$(gcloud config get-value account)
 
+# Setup keys to allow access to database
+gcloud iam service-accounts keys create ~/.config/gcloud/application_default_credentials.json --iam-account=$SERVICE_ACCOUNT
+
+# Create random password to allow db-transfer script access to the ODK database
 openssl rand -base64 48 | tr -d '\n' | docker secret create sync-pwd -
+
+# This is used by docker to connect to the frontend database
+export INSTANCE_NAME=$(gcloud sql instances list --format "value(connectionName)")
 
 docker stack deploy -c docker-compose.yml syncldap
