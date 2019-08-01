@@ -1,8 +1,4 @@
 #!/bin/bash
-if [ -f /root/sync-endpoint]; then
-  echo "System already configured. Skipping script"
-  exit 0
-fi
 
 DEBIAN_FRONTEND=noninteractive
 
