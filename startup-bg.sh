@@ -19,7 +19,8 @@ apt-get -y install \
  software-properties-common \
  maven \
  git \
- openssl
+ openssl \
+ google-cloud-sdk
 
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 add-apt-repository -y \
