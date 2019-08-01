@@ -22,19 +22,11 @@ services:
       - ldap-network
     env_file:
       - ldap.env
-#  frontend-db:
-#    image: postgres:9.6
-#    deploy:
-#      replicas: 1
-#    networks:
-#      - frontend-db-network
-#    volumes:
-#      - frontend-db-vol:/var/lib/postgresql/data
-#    env_file:
-#      - frontend-db.env
   frontend-db:
     image: gcr.io/cloudsql-docker/gce-proxy:1.12
     command: /cloud_sql_proxy -instances=$INSTANCE_NAME=tcp:0.0.0.0:5432
+    deploy:
+      replicas: 1
     networks:
       - frontend-db-network
       - external-network
