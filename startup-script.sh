@@ -1,5 +1,5 @@
 #!/bin/bash
-if [ -f /root/sync-endpoint]; then
+if [ -f /sync-endpoint ]; then
   echo "System already configured. Skipping script"
   exit 0
 fi
