@@ -54,6 +54,5 @@ gcloud iam service-accounts keys create ~/.config/gcloud/application_default_cre
 openssl rand -base64 48 | tr -d '\n' | docker secret create sync-pwd -
 
 # This is used by docker to connect to the frontend database
-export INSTANCE_NAME=$(gcloud sql instances list --format "value(connectionName)")
-
-docker stack deploy -c docker-compose.yml syncldap
+env INSTANCE_NAME=$(gcloud sql instances list --format "value(connectionName)") \
+        docker stack deploy -c docker-compose.yml syncldap
