@@ -48,7 +48,7 @@ docker build -t odk/db-transfer db-transfer
 SERVICE_ACCOUNT=$(gcloud config get-value account)
 
 # Setup keys to allow access to database
-gcloud iam service-accounts keys create ~/.config/gcloud/application_default_credentials.json --iam-account=$SERVICE_ACCOUNT
+gcloud iam service-accounts keys create /.config/gcloud/application_default_credentials.json --iam-account=$SERVICE_ACCOUNT
 
 # Create random password to allow db-transfer script access to the ODK database
 openssl rand -base64 48 | tr -d '\n' | docker secret create sync-pwd -
