@@ -39,7 +39,7 @@ services:
       - frontend-db-network
       - external-network
     volumes:
-      - ~/.config:/root/.config
+      - /.config:/root/.config
   db-transfer:
     image: odk/db-transfer
     deploy:
