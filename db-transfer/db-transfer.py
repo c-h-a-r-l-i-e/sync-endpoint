@@ -2,10 +2,11 @@ import odkxpy
 import os
 import time
 import sqlalchemy
-from sqlalchemy import create_engine, Table, Column, select, text
+from sqlalchemy import create_engine, Table, Column, select, text, exists
+import json
 
 # For now hardcode sensitive databases we want to delete, could later make this some sort of configuration file
-SENSITIVE_TABLES = ['survey']
+SENSITIVE_TABLES = ['survey', 'sample']
 # Time we wait after transferring a set of rows before transferring the next set
 WAIT_TIME = 15
 
@@ -31,7 +32,7 @@ class TableTransfer():
         self.rows = []
 
 
-    # Rows updated to current contents of the old table
+    # Rows updated to current contents of the ODK table
     def updateRows(self):
         self.rows = self.oldTable.getAllDataRows().rows
         
@@ -70,7 +71,6 @@ class TableTransfer():
     def addColumn(self, col):
         cname = col.elementKey
         dt = self.getColumnDatatype(col)
-        print(dt)
         with self.dbEng.begin() as conn:
             conn.execute('ALTER TABLE {} ADD COLUMN "{}" {}'.format(self.getTableName(), cname, dt))
 
@@ -92,8 +92,30 @@ class TableTransfer():
         # Add other columns
         for column in self.getColumns():
             cname = column.elementKey
-            dt = self.getColumnDatatype(column)
-            tbl.append_column(sqlalchemy.Column(cname, dt))
+            if not cname.startswith('log_'):
+                dt = self.getColumnDatatype(column)
+                tbl.append_column(sqlalchemy.Column(cname, dt))
+
+        meta.create_all(self.dbEng)
+
+
+    # Create a log table in the database for the ODK-X table
+    def createDBLogTable(self):
+        name = self.getTableName() + 'Log'
+        if name in self.getDBTables():
+            return # Exit as table already exists
+        meta = sqlalchemy.MetaData()
+        meta.bind = self.dbEng
+        tbl = sqlalchemy.Table(name, meta) 
+
+        # Add columns
+        tbl.append_column(sqlalchemy.Column('log_id', sqlalchemy.Integer(), primary_key=True))
+        tbl.append_column(sqlalchemy.Column('user', sqlalchemy.Text()))
+        tbl.append_column(sqlalchemy.Column('time', sqlalchemy.String(100)))
+        tbl.append_column(sqlalchemy.Column('row_id', sqlalchemy.String(50)))
+        tbl.append_column(sqlalchemy.Column('row_dataETagAtModification', sqlalchemy.String(50)))
+        tbl.append_column(sqlalchemy.Column('column', sqlalchemy.Text()))
+        tbl.append_column(sqlalchemy.Column('new_data', sqlalchemy.Text()))
 
         meta.create_all(self.dbEng)
 
@@ -113,9 +135,10 @@ class TableTransfer():
         columnChange = False
         for col in self.getColumns():
             if not col.elementKey in [c.name for c in table.c]:
-                print("Adding new column '%s' to table '%s'" % (col.elementKey, tableName))
-                self.addColumn(col)
-                columnChange = True
+                if not col.elementKey.startswith('log_'):
+                    print("Adding new column '%s' to table '%s'" % (col.elementKey, tableName))
+                    self.addColumn(col)
+                    columnChange = True
         
         # Reload table from the database if columns changed
         if columnChange:
@@ -135,7 +158,9 @@ class TableTransfer():
                     print("Row does not exist, adding it...", end="")
                     values = {'_id': row.id, '_dataETagAtModification': row.dataETagAtModification, '_createUser': row.createUser}
                     for entry in row.orderedColumns:
-                        values[entry.column] = entry.value
+                        if not entry.column.startswith('log_'):
+                            values[entry.column] = entry.value
+
                     ins = table.insert().values(values)
                     conn.execute(ins)
                     print("Done")
@@ -148,11 +173,93 @@ class TableTransfer():
                         print("Row has updates, updating now...", end="")
                         values = {'_id': row.id, '_dataETagAtModification': row.dataETagAtModification, '_createUser': row.createUser}
                         for entry in row.orderedColumns:
-                            values[entry.column] = entry.value
+                            if not entry.column.startswith('log_'):
+                                values[entry.column] = entry.value
 
                         update = table.update().where(table.c._id == row.id).values(values)
                         conn.execute(update)
                         print("done")
+
+                result.close()
+
+        conn.close()
+
+    
+    def getLogString(self, row):
+        logMap = {}
+        logCount = 0
+        for col in row.orderedColumns:
+            columnName = col.column
+            if columnName.startswith('log_'):
+                try:
+                    logNum = int(columnName[4:])
+                    if col.value != None:
+                        logMap[logNum] = col.value
+                        logCount = max(logCount, logNum + 1)
+
+                except Exception:
+                    print("WARNING: Invalid log column encountered: " + columnName)
+
+        log = ""
+        for i in range(logCount):
+            if i in logMap.keys():
+                log += logMap[i]
+            else:
+                print("WARNING: ODK table is missing log column: log_" + str(i))
+
+        return log
+
+
+    # Update on-database log 
+    def updateLog(self):
+        tableName = self.getTableName() + "Log"
+        if not tableName in self.getDBTables():
+            print("Creating new log table %s" % tableName)
+            self.createDBLogTable()
+
+        # Load table from the database
+        meta = sqlalchemy.MetaData()
+        table = Table(tableName, meta, autoload=True, autoload_with=self.dbEng)
+
+        # Ensure all columns exist - we don't want any errors later on due to missing columns
+        for col in ['user', 'time', 'row_id', 'column', 'new_data']:
+            if not col in [c.name for c in table.c]:
+                print("ERROR: log table doesn't contain column: " + col)
+                return
+        
+        conn = self.dbEng.connect()
+        for row in self.rows:
+            # Begin transaction to ensure this row is completely added or not at all added
+            with conn.begin() as trans:
+                # Check if row exists already
+                query = select([table.c.row_dataETagAtModification]).where(table.c.row_id==row.id)
+                result = conn.execute(query)
+
+                #If row doesn't exist yet or has been updated, then add its log
+                oldRow = conn.execute(select([exists().where(table.c.row_id==row.id)
+                    .where(table.c.row_dataETagAtModification == row.dataETagAtModification)])).scalar()
+
+                if not oldRow:
+                    print("Log for row has changed, adding them...", end="")
+                    baseValues = {'row_id': row.id, 'row_dataETagAtModification': row.dataETagAtModification, 'user': row.lastUpdateUser}
+
+                    #logEntries is a list of lists as follows: [[time1, columnName1, newData1], [time2, columnName2, newData2], ...]
+                    logEntries = json.loads(self.getLogString(row))
+                    for entry in logEntries:
+                        if entry != None and len(entry) == 3:
+                            time = entry[0]
+                            column= entry[1]
+                            newData = entry[2]
+
+                            values = baseValues.copy()
+                            values['time'] = time
+                            values['column'] = column
+                            values['new_data'] = str(newData)
+
+                            ins = table.insert().values(values)
+                            conn.execute(ins)
+
+                    print("Done")
 
                 result.close()
 
@@ -172,6 +279,7 @@ class TableTransfer():
             deleteAfter = self.getTableName() in SENSITIVE_TABLES
         self.updateRows()
         self.copyRows()
+        self.updateLog()
         if deleteAfter:
             self.deleteRows()
 
