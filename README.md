@@ -1,3 +1,8 @@
+## Notes
+This is a custom version of the ODK-X sync endpoint, designed for surveys involving identification.
+
+Currently this assumes you are deploying to website odk.fr.to.
+
 ## Prerequisites
 
 Same as [sync-endpoint-containers](https://github.com/opendatakit/sync-endpoint-containers)

@@ -41,6 +41,11 @@ docker build --pull -t odk/openldap openldap
 docker build --pull -t odk/phpldapadmin phpldapadmin
 docker build -t odk/db-transfer db-transfer
 
+docker run --rm -p 443:443 -p 80:80 --name letsencrypt -v "/etc/letsencrypt:/etc/letsencrypt" -v "/var/lib/letsencrypt:/var/lib/letsencrypt" certbot/certbot certonly -n -m "mail@odk.fr.to" -d odk.fr.to --standalone --agree-tos
+
+#Set up automatic renewal of certificates
+(crontab -l 2>/dev/null; echo "1 0 * * * docker run --rm --name letsencrypt -v '/etc/letsencrypt:/etc/letsencrypt' -v '/var/lib/letsencrypt:/var/lib/letsencrypt' -v '/usr/share/nginx/html:/usr/share/nginx/html' certbot/certbot:latest renew --quiet") | crontab -
+
 SERVICE_ACCOUNT=$(gcloud config get-value account)
 
 # Setup keys to allow access to database
