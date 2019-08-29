@@ -7,8 +7,8 @@ import json
 
 # For now hardcode sensitive databases we want to delete, could later make this some sort of configuration file
 SENSITIVE_TABLES = ['survey', 'sample']
-# Time we wait after transferring a set of rows before transferring the next set
-WAIT_TIME = 15
+# Time we wait (seconds) after transferring a set of rows before transferring the next set
+WAIT_TIME = 60
 
 TESTING = False
 
@@ -244,20 +244,31 @@ class TableTransfer():
                     baseValues = {'row_id': row.id, 'row_dataETagAtModification': row.dataETagAtModification, 'user': row.lastUpdateUser}
 
                     #logEntries is a list of lists as follows: [[time1, columnName1, newData1], [time2, columnName2, newData2], ...]
-                    logEntries = json.loads(self.getLogString(row))
-                    for entry in logEntries:
-                        if entry != None and len(entry) == 3:
-                            time = entry[0]
-                            column= entry[1]
-                            newData = entry[2]
+                    logString = self.getLogString(row)
 
-                            values = baseValues.copy()
-                            values['time'] = time
-                            values['column'] = column
-                            values['new_data'] = str(newData)
+                    if len(logString) == 0:
+                        print("unexpected empty log...not adding...", end="")
 
-                            ins = table.insert().values(values)
-                            conn.execute(ins)
+                    else:
+                        try:
+                            logEntries = json.loads(self.getLogString(row))
+                            for entry in logEntries:
+                                if entry != None and len(entry) == 3:
+                                    time = entry[0]
+                                    column= entry[1]
+                                    newData = entry[2]
+
+                                    values = baseValues.copy()
+                                    values['time'] = time
+                                    values['column'] = column
+                                    values['new_data'] = str(newData)
+
+                                    ins = table.insert().values(values)
+                                    conn.execute(ins)
+
+
+                        except Exception as e:
+                            print("unexpected error while updating log: " + str(e), end = "...")
 
                     print("Done")
 
@@ -269,12 +280,13 @@ class TableTransfer():
     def deleteRows(self):
         for row in self.rows:
             try:
-                self.oldTable.deleteRecord(row.dataETagAtModification, row.id)
+                self.oldTable.deleteRecord(self.oldTable.getdataETag(), row.id)
             except Exception as err:
-                print("Failed to delete row due to:" + err)
+                print("Failed to delete row due to:" + str(err))
 
 
     def transfer(self, deleteAfter=None):
+        print("Starting transfer of " + self.getTableName())
         if deleteAfter is None:
             deleteAfter = self.getTableName() in SENSITIVE_TABLES
         self.updateRows()
@@ -282,15 +294,16 @@ class TableTransfer():
         self.updateLog()
         if deleteAfter:
             self.deleteRows()
+        print("Finished transfer")
 
 
 if __name__ == "__main__":
     # Get password from secret provided by docker
-    con = odkxpy.OdkxConnection('http://nginx/odktables/', 'dbTransfer', 
+    con = odkxpy.OdkxConnection('https://odk.fr.to/odktables/', 'dbTransfer', 
             os.popen("cat /run/secrets/sync-pwd").read())
 
     if TESTING:
-        con = odkxpy.OdkxConnection('http://odk.fr.to/odktables/', 'cmaclean', 
+        con = odkxpy.OdkxConnection('https://odk.fr.to/odktables/', 'cmaclean', 
                 'T35t')
 
     meta = odkxpy.OdkxServerMeta(con)
@@ -303,7 +316,7 @@ if __name__ == "__main__":
         db = os.environ['POSTGRES_DB']
         pswd = os.environ['POSTGRES_PASSWORD']
         usr = os.environ['POSTGRES_USER']
-        eng = create_engine('postgresql://{}:{}@frontend-db/{}'.format(usr, pswd, db))
+        eng = create_engine('postgresql://{}:{}@sync-endpoint-db.cx2rw8qashkb.eu-west-2.rds.amazonaws.com/{}'.format(usr, pswd, db))
 
     transfers = []
     for table in tables:
