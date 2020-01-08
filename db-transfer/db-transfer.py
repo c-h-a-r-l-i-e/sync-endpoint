@@ -3,13 +3,20 @@ import os
 import time
 import sqlalchemy
 from sqlalchemy import create_engine, Table, Column, select, text, exists
+from sqlalchemy.dialects import postgresql
 import json
+import pickle
+import os.path
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from io import BytesIO
 
 # For now hardcode sensitive databases we want to delete, could later make this some sort of configuration file
 SENSITIVE_TABLES = ['survey', 'sample']
 # Time we wait (seconds) after transferring a set of rows before transferring the next set
 WAIT_TIME = 60
-
 TESTING = False
 
 """
@@ -30,6 +37,50 @@ class TableTransfer():
         self.oldTable = oldTable
         self.dbEng = dbEng
         self.rows = []
+	#setup credentials for google drive access
+        self.creds = None
+        if os.path.exists('token.pickle'):
+            with open('token.pickle', 'rb') as token:
+                self.creds = pickle.load(token)
+
+    
+    def getGoogleCreds(self):
+        if not self.creds or not self.creds.valid:
+            if self.creds and self.creds.expired and self.creds.refresh_token:
+                self.creds.refresh(Request())
+            else:
+                raise RuntimeError('Google drive credentials cannot be refreshed!')
+            # Save the credentials for the next run
+            with open('token.pickle', 'wb') as token:
+                pickle.dump(self.creds, token)
+
+        return self.creds
+                
+
+    def uploadAttachmentsGDrive(self, rowId):
+        manifest = self.oldTable.getAttachmentsManifest(rowId)
+        if len(manifest) > 0:
+            service = build('drive', 'v3', credentials=self.getGoogleCreds(), cache_discovery=False)
+            for serverFile in manifest:
+                mime_type = serverFile.contentType
+                file_name = serverFile.filename
+
+                data = self.oldTable.getAttachment(rowId, file_name, False, 10)
+                content = BytesIO(data.content)
+
+                media = MediaIoBaseUpload(content, mime_type)
+                file_metadata = {'name': file_name}
+                f = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+
+
+    def transferAttachments(self):
+        for row in self.rows:
+            try:
+                print("Uploading attachments to google Drive...", end="")
+                self.uploadAttachmentsGDrive(row.id)
+                print("Done")
+            except Exception as err:
+                print("Failed due to:" + str(err))
 
 
     # Rows updated to current contents of the ODK table
@@ -71,8 +122,9 @@ class TableTransfer():
     def addColumn(self, col):
         cname = col.elementKey
         dt = self.getColumnDatatype(col)
+        print()
         with self.dbEng.begin() as conn:
-            conn.execute('ALTER TABLE {} ADD COLUMN "{}" {}'.format(self.getTableName(), cname, dt))
+            conn.execute('ALTER TABLE {} ADD COLUMN "{}" {}'.format(self.getTableName(), cname, dt.compile(dialect=postgresql.dialect())))
 
 
     # Create a database table which matches the ODK-X table
@@ -293,6 +345,7 @@ class TableTransfer():
         self.copyRows()
         self.updateLog()
         if deleteAfter:
+            self.transferAttachments()
             self.deleteRows()
         print("Finished transfer")
 
@@ -304,7 +357,7 @@ if __name__ == "__main__":
 
     if TESTING:
         con = odkxpy.OdkxConnection('https://odk.fr.to/odktables/', 'cmaclean', 
-                'T35t')
+                'T35t1ng')
 
     meta = odkxpy.OdkxServerMeta(con)
     tables = meta.getTables()
@@ -316,7 +369,7 @@ if __name__ == "__main__":
         db = os.environ['POSTGRES_DB']
         pswd = os.environ['POSTGRES_PASSWORD']
         usr = os.environ['POSTGRES_USER']
-        eng = create_engine('postgresql://{}:{}@sync-endpoint-db.cx2rw8qashkb.eu-west-2.rds.amazonaws.com/{}'.format(usr, pswd, db))
+        eng = create_engine('postgresql://{}:{}@sync-endpoint-small.cx2rw8qashkb.eu-west-2.rds.amazonaws.com/{}'.format(usr, pswd, db))
 
     transfers = []
     for table in tables:
