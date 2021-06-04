@@ -27,7 +27,7 @@
         <itSubmissionsDirectory>${project.basedir}/../src/test/testfiles/submissions</itSubmissionsDirectory>
         <itSyncDirectory>${project.basedir}/../src/test/testfiles/sync</itSyncDirectory>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <apache.httpclient.version>4.5.7</apache.httpclient.version>
+        <apache.httpclient.version>4.5.13</apache.httpclient.version>
         <apache.httpcore.version>4.4.11</apache.httpcore.version>
         <apache.httpmime.version>4.5.7</apache.httpmime.version>
         <findbugs.jsr305.version>3.0.2</findbugs.jsr305.version>
